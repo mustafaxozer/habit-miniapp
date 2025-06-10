@@ -6,57 +6,59 @@
 <title>WFX Coin Borsası</title>
 <style>
   body {
-    font-family: Arial, sans-serif;
     background: #121212;
     color: #eee;
-    margin: 0;
+    font-family: Arial, sans-serif;
     padding: 20px;
+    margin: 0;
   }
   h1 {
     text-align: center;
     color: #4caf50;
   }
-  #price {
-    font-size: 2rem;
+  #priceDisplay, #balanceDisplay, #cashDisplay {
+    text-align: center;
+    font-size: 1.5rem;
+    margin: 10px 0;
+  }
+  #tradeSection {
     text-align: center;
     margin: 20px 0;
   }
-  #balance {
-    font-size: 1.2rem;
-    margin-bottom: 10px;
-  }
-  button {
-    background: #4caf50;
-    border: none;
-    padding: 10px 15px;
-    color: #fff;
-    cursor: pointer;
-    font-size: 1rem;
-    margin: 5px;
-    border-radius: 5px;
-    transition: background 0.3s ease;
-  }
-  button:hover {
-    background: #45a049;
-  }
   input[type="number"] {
     width: 80px;
-    padding: 5px;
     font-size: 1rem;
+    padding: 5px;
+    border-radius: 4px;
+    border: none;
     margin-right: 10px;
   }
+  button {
+    font-size: 1rem;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    margin: 0 5px;
+    cursor: pointer;
+    background-color: #4caf50;
+    color: white;
+    transition: background-color 0.3s ease;
+  }
+  button:hover {
+    background-color: #45a049;
+  }
   #messages {
-    margin-top: 20px;
-    height: 100px;
+    max-height: 120px;
     overflow-y: auto;
     background: #222;
     padding: 10px;
-    border-radius: 5px;
+    border-radius: 8px;
+    margin-top: 20px;
+    font-size: 0.9rem;
   }
-  #chart-container {
-    width: 100%;
-    max-width: 600px;
-    margin: 30px auto;
+  #chartContainer {
+    max-width: 700px;
+    margin: 30px auto 0 auto;
     background: #222;
     padding: 20px;
     border-radius: 10px;
@@ -67,50 +69,50 @@
 
 <h1>WFX Coin Borsası</h1>
 
-<div id="price">Fiyat: <span id="coinPrice">Yükleniyor...</span> ₺</div>
+<div id="priceDisplay">Fiyat: <span id="price">...</span> ₺</div>
+<div id="balanceDisplay">Coin Bakiyeniz: <span id="balance">...</span> WFX</div>
+<div id="cashDisplay">TL Bakiyeniz: <span id="cash">...</span> ₺</div>
 
-<div id="balance">Bakiyeniz: <span id="userBalance">100</span> WFX</div>
-
-<div>
+<div id="tradeSection">
   <input type="number" id="tradeAmount" min="1" placeholder="Adet" />
-  <button onclick="buyCoin()">Al</button>
-  <button onclick="sellCoin()">Sat</button>
+  <button id="buyBtn">Al</button>
+  <button id="sellBtn">Sat</button>
 </div>
 
-<div id="chart-container">
+<div id="chartContainer">
   <canvas id="priceChart"></canvas>
 </div>
 
 <div id="messages"></div>
 
-<!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
-  let coinPrice = 1;
-  let userBalance = 100;
-  let userCash = 1000;
-  const priceElement = document.getElementById('coinPrice');
-  const balanceElement = document.getElementById('userBalance');
-  const messages = document.getElementById('messages');
+  const priceEl = document.getElementById('price');
+  const balanceEl = document.getElementById('balance');
+  const cashEl = document.getElementById('cash');
+  const messagesEl = document.getElementById('messages');
 
-  // Chart.js setup
+  let price = 0;
+  let userBalance = 0;
+  let userCash = 0;
+
+  // Chart setup
   const ctx = document.getElementById('priceChart').getContext('2d');
-  const priceData = {
-    labels: [],  // zaman damgaları
+  const data = {
+    labels: [], // Zaman damgaları
     datasets: [{
       label: 'WFX Fiyatı (₺)',
       data: [],
       borderColor: '#4caf50',
-      backgroundColor: 'rgba(76, 175, 80, 0.3)',
+      backgroundColor: 'rgba(76,175,80,0.3)',
       fill: true,
       tension: 0.3,
-      pointRadius: 2
+      pointRadius: 3
     }]
   };
   const config = {
     type: 'line',
-    data: priceData,
+    data,
     options: {
       responsive: true,
       animation: false,
@@ -119,127 +121,161 @@
           type: 'time',
           time: {
             unit: 'second',
-            tooltipFormat: 'HH:mm:ss',
-            displayFormats: {
-              second: 'HH:mm:ss'
-            }
+            displayFormats: { second: 'HH:mm:ss' },
+            tooltipFormat: 'HH:mm:ss'
           },
-          ticks: {color: '#eee'}
+          ticks: { color: '#eee' }
         },
         y: {
-          ticks: {color: '#eee'},
+          ticks: { color: '#eee' },
           beginAtZero: false
         }
       },
       plugins: {
-        legend: {
-          labels: {color: '#eee'}
-        }
+        legend: { labels: { color: '#eee' } }
       }
     }
   };
   const priceChart = new Chart(ctx, config);
 
-  async function fetchPrice() {
+  // Backend'ten fiyat ve bakiye çek
+  async function fetchStatus() {
     try {
-      const res = await fetch('/price');
-      if (!res.ok) throw new Error('Fiyat alınamadı');
-      const data = await res.json();
-      coinPrice = data.price;
-      priceElement.textContent = coinPrice.toFixed(2);
+      const res = await fetch('/status');
+      if (!res.ok) throw new Error('Sunucudan veri alınamadı');
+      const json = await res.json();
+      price = json.price;
+      userBalance = json.userBalance;
+      userCash = json.userCash;
 
-      // Grafik verisi güncelle
+      priceEl.textContent = price.toFixed(2);
+      balanceEl.textContent = userBalance.toFixed(2);
+      cashEl.textContent = userCash.toFixed(2);
+
+      // Grafik güncelle
       const now = new Date();
-      priceData.labels.push(now);
-      priceData.datasets[0].data.push(coinPrice);
+      data.labels.push(now);
+      data.datasets[0].data.push(price);
 
-      // Veri sayısı çok olursa eski verileri sil
-      if (priceData.labels.length > 30) {
-        priceData.labels.shift();
-        priceData.datasets[0].data.shift();
+      // 30'dan fazla veri varsa eskiyi at
+      if (data.labels.length > 30) {
+        data.labels.shift();
+        data.datasets[0].data.shift();
       }
 
       priceChart.update();
-
-    } catch (e) {
-      priceElement.textContent = 'Fiyat verisi alınamadı';
-      messages.innerHTML += `<div style="color: red;">${e.message}</div>`;
+    } catch (err) {
+      addMessage('Hata: ' + err.message, 'red');
     }
   }
 
-  async function fetchBalance() {
+  // Alış işlemi
+  async function buy() {
+    const amount = parseInt(document.getElementById('tradeAmount').value);
+    if (!amount || amount <= 0) {
+      alert('Geçerli bir miktar girin');
+      return;
+    }
+    if (amount * price > userCash) {
+      alert('Yeterli TL bakiyeniz yok');
+      return;
+    }
+
     try {
-      const res = await fetch('/balance');
-      if (!res.ok) throw new Error('Bakiye alınamadı');
+      const res = await fetch('/trade', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ type: 'buy', amount })
+      });
       const data = await res.json();
-      userBalance = data.balance;
-      userCash = data.cash;
-      balanceElement.textContent = userBalance.toFixed(2);
-    } catch (e) {
-      messages.innerHTML += `<div style="color: red;">${e.message}</div>`;
+      if (!res.ok) throw new Error(data.error || 'İşlem başarısız');
+
+      price = data.price;
+      userBalance = data.userBalance;
+      userCash = data.userCash;
+
+      priceEl.textContent = price.toFixed(2);
+      balanceEl.textContent = userBalance.toFixed(2);
+      cashEl.textContent = userCash.toFixed(2);
+
+      addMessage(`Başarıyla ${amount} adet coin satın aldınız!`, 'green');
+
+      // Grafiğe yeni fiyatı ekle
+      const now = new Date();
+      this.data = priceChart.data;
+      this.data.labels.push(now);
+      this.data.datasets[0].data.push(price);
+      if (this.data.labels.length > 30) {
+        this.data.labels.shift();
+        this.data.datasets[0].data.shift();
+      }
+      priceChart.update();
+
+    } catch (err) {
+      addMessage('Hata: ' + err.message, 'red');
     }
   }
 
-  async function buyCoin() {
+  // Satış işlemi
+  async function sell() {
     const amount = parseInt(document.getElementById('tradeAmount').value);
     if (!amount || amount <= 0) {
-      alert('Lütfen geçerli bir adet giriniz');
-      return;
-    }
-    const cost = amount * coinPrice;
-    if (cost > userCash) {
-      alert('Yeterli TL bakiyeniz yok!');
-      return;
-    }
-
-    const res = await fetch('/trade', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ type: 'buy', amount })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      userBalance = data.balance;
-      userCash = data.cash;
-      balanceElement.textContent = userBalance.toFixed(2);
-      messages.innerHTML += `<div style="color: #4caf50;">${amount} WFX satın alındı.</div>`;
-      fetchPrice();
-    } else {
-      messages.innerHTML += `<div style="color: red;">${data.error}</div>`;
-    }
-  }
-
-  async function sellCoin() {
-    const amount = parseInt(document.getElementById('tradeAmount').value);
-    if (!amount || amount <= 0) {
-      alert('Lütfen geçerli bir adet giriniz');
+      alert('Geçerli bir miktar girin');
       return;
     }
     if (amount > userBalance) {
-      alert('Yeterli WFX bakiyeniz yok!');
+      alert('Yeterli coin bakiyeniz yok');
       return;
     }
 
-    const res = await fetch('/trade', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ type: 'sell', amount })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      userBalance = data.balance;
-      userCash = data.cash;
-      balanceElement.textContent = userBalance.toFixed(2);
-      messages.innerHTML += `<div style="color: #f44336;">${amount} WFX satıldı.</div>`;
-      fetchPrice();
-    } else {
-      messages.innerHTML += `<div style="color: red;">${data.error}</div>`;
+    try {
+      const res = await fetch('/trade', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ type: 'sell', amount })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'İşlem başarısız');
+
+      price = data.price;
+      userBalance = data.userBalance;
+      userCash = data.userCash;
+
+      priceEl.textContent = price.toFixed(2);
+      balanceEl.textContent = userBalance.toFixed(2);
+      cashEl.textContent = userCash.toFixed(2);
+
+      addMessage(`Başarıyla ${amount} adet coin sattınız!`, 'orange');
+
+      // Grafiğe yeni fiyatı ekle
+      const now = new Date();
+      this.data = priceChart.data;
+      this.data.labels.push(now);
+      this.data.datasets[0].data.push(price);
+      if (this.data.labels.length > 30) {
+        this.data.labels.shift();
+        this.data.datasets[0].data.shift();
+      }
+      priceChart.update();
+
+    } catch (err) {
+      addMessage('Hata: ' + err.message, 'red');
     }
   }
 
-  fetchPrice();
-  fetchBalance();
-  setInterval(fetchPrice, 10000);
+  function addMessage(msg, color = 'white') {
+    const p = document.createElement('p');
+    p.textContent = msg;
+    p.style.color = color;
+    messagesEl.prepend(p);
+  }
+
+  document.getElementById('buyBtn').addEventListener('click', buy);
+  document.getElementById('sellBtn').addEventListener('click', sell);
+
+  // Sayfa açıldığında ve her 3 saniyede bir durumu çek
+  fetchStatus();
+  setInterval(fetchStatus, 3000);
 </script>
 
 </body>
