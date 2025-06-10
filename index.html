@@ -1,56 +1,105 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Alışkanlık Takip</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WFX Coin Tracker</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    input, button { width: 100%; padding: 10px; margin: 5px 0; }
-    ul { list-style: none; padding: 0; }
-    li { margin: 5px 0; background: #eee; padding: 10px; border-radius: 5px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #0e0e0e;
+      color: white;
+      height: 100vh;
+    }
+
+    h1 {
+      margin: 0.5em;
+    }
+
+    #chartContainer {
+      width: 90%;
+      max-width: 600px;
+      height: 300px;
+    }
+
+    #balance {
+      font-size: 1.5em;
+      margin-top: 2em;
+    }
   </style>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <h2>Alışkanlık Takip</h2>
-  <input id="habitInput" type="text" placeholder="Yeni alışkanlık gir" />
-  <button onclick="addHabit()">Ekle</button>
-  <ul id="habitList"></ul>
+  <h1>WFX Coin</h1>
+  <div id="chartContainer">
+    <canvas id="priceChart"></canvas>
+  </div>
+  <div id="balance">Yükleniyor...</div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    function loadHabits() {
-      const habits = JSON.parse(localStorage.getItem("habits") || "[]");
-      const list = document.getElementById("habitList");
-      list.innerHTML = "";
-      habits.forEach((habit, i) => {
-        const li = document.createElement("li");
-        li.textContent = habit;
-        const del = document.createElement("button");
-        del.textContent = "🗑️";
-        del.style.marginLeft = "10px";
-        del.onclick = () => {
-          habits.splice(i, 1);
-          localStorage.setItem("habits", JSON.stringify(habits));
-          loadHabits();
-        };
-        li.appendChild(del);
-        list.appendChild(li);
-      });
+    // Simülasyon verileri
+    const userId = window.Telegram.WebApp.initDataUnsafe.user?.id || "123456";
+    let userBalance = 1583.23;
+    let price = 1.00;
+    let priceHistory = [price];
+    const labels = [new Date().toLocaleTimeString()];
+
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'WFX Fiyatı ($)',
+          data: priceHistory,
+          borderColor: 'rgba(255, 99, 132, 1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.2,
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: {
+            display: false
+          },
+          y: {
+            beginAtZero: false
+          }
+        }
+      }
+    });
+
+    function updatePrice() {
+      const change = (Math.random() - 0.5) * 0.1;
+      price = +(price + change).toFixed(4);
+      priceHistory.push(price);
+      if (priceHistory.length > 20) {
+        priceHistory.shift();
+        labels.shift();
+      }
+      labels.push(new Date().toLocaleTimeString());
+      chart.update();
     }
 
-    function addHabit() {
-      const input = document.getElementById("habitInput");
-      const val = input.value.trim();
-      if (!val) return;
-      const habits = JSON.parse(localStorage.getItem("habits") || "[]");
-      habits.push(val);
-      localStorage.setItem("habits", JSON.stringify(habits));
-      input.value = "";
-      loadHabits();
+    function updateBalance() {
+      document.getElementById("balance").textContent = `WFX Bakiyeniz: ${userBalance.toFixed(2)} WFX (~$${(userBalance * price).toFixed(2)})`;
     }
 
-    loadHabits();
+    setInterval(() => {
+      updatePrice();
+      updateBalance();
+    }, 3000);
+
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
   </script>
 </body>
 </html>
