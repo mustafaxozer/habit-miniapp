@@ -2,101 +2,233 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
-<title>WFX Coin Borsası</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>WFX Coin Borsa MiniApp</title>
 <style>
   body {
-    background-color: #0f0f0f;
-    color: #fff;
     font-family: Arial, sans-serif;
-    text-align: center;
-    margin: 0;
-    padding: 1rem;
+    background: #121212;
+    color: #eee;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
   }
-  canvas {
-    max-width: 100%;
-    margin: 1rem 0;
-  }
-  .balance {
-    font-size: 1.5rem;
-    margin-top: 1rem;
-  }
-  .info-box {
-    background: #1a1a1a;
-    padding: 1rem;
+  h1 { margin: 20px; }
+  #chart {
+    width: 90vw; max-width: 700px; height: 300px;
+    background: #222;
     border-radius: 10px;
-    margin-top: 1rem;
+    padding: 10px;
+    margin-bottom: 15px;
   }
-  .info-box p {
-    margin: 0.3rem 0;
+  #wallet {
+    background: #1e1e1e;
+    padding: 15px;
+    border-radius: 8px;
+    width: 90vw; max-width: 700px;
+    margin-bottom: 15px;
+  }
+  button {
+    background: #4caf50;
+    border: none;
+    color: white;
+    padding: 10px 18px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  button:disabled {
+    background: #777;
+    cursor: not-allowed;
+  }
+  input[type=number] {
+    width: 100px;
+    padding: 6px;
+    border-radius: 4px;
+    border: none;
+    margin-left: 8px;
+    text-align: right;
+  }
+  #tradeForm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  #priceDisplay {
+    font-size: 1.2rem;
+    margin-top: 10px;
   }
 </style>
 </head>
 <body>
-  <h1>WFX Coin</h1>
-  <p>Güncel Fiyat (TL): <span id="currentPrice">...</span></p>
-  <canvas id="priceChart" width="400" height="200"></canvas>
-  <div class="balance">
-    Cüzdanınız: <span id="balance">315 WFX</span>
-  </div>
-  <div class="info-box">
-    <p>Toplam Arz: <span id="supply">...</span></p>
-    <p>Toplam Talep: <span id="demand">...</span></p>
-    <p>Güncellenme Zamanı: <span id="lastUpdate">...</span></p>
-  </div>
 
+<h1>WFX Coin Borsa Mini App</h1>
+
+<div id="chart">
+  <canvas id="priceChart" width="700" height="300"></canvas>
+</div>
+
+<div id="priceDisplay">Fiyat: <span id="currentPrice">--</span> TL</div>
+
+<div id="wallet">
+  <h2>Cüzdanınız</h2>
+  <p>WFX Coin: <span id="userCoins">0</span></p>
+  <p>TL Bakiyesi: <span id="userBalance">10000</span> ₺</p>
+
+  <form id="tradeForm">
+    <label>
+      Miktar:
+      <input type="number" id="amount" min="0" step="0.01" value="0" />
+    </label>
+    <button type="button" id="buyBtn">Al</button>
+    <button type="button" id="sellBtn">Sat</button>
+  </form>
+
+  <div id="tradeMessage" style="margin-top:10px;color:#f44336;"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const apiUrl = 'http://localhost:3000/api/market'; // Backend URL
+  const priceSpan = document.getElementById('currentPrice');
+  const userCoinsSpan = document.getElementById('userCoins');
+  const userBalanceSpan = document.getElementById('userBalance');
+  const amountInput = document.getElementById('amount');
+  const buyBtn = document.getElementById('buyBtn');
+  const sellBtn = document.getElementById('sellBtn');
+  const tradeMessage = document.getElementById('tradeMessage');
 
-const ctx = document.getElementById('priceChart').getContext('2d');
-const chart = new Chart(ctx, {
-  type: 'line',
-  data: {
-    labels: [],
-    datasets: [{
-      label: 'WFX / TL',
-      data: [],
-      borderColor: '#00ff88',
-      backgroundColor: 'rgba(0, 255, 136, 0.2)',
-      tension: 0.2,
-      fill: true,
-    }]
-  },
-  options: {
-    responsive: true,
-    scales: { y: { beginAtZero: false } }
+  let marketData = null;
+  let userData = {
+    coins: 0,
+    balance: 10000 // başlangıç bakiye TL cinsinden
+  };
+
+  // LocalStorage’dan cüzdan verisi yükle
+  function loadUserData() {
+    const stored = localStorage.getItem('wfxUserData');
+    if (stored) {
+      userData = JSON.parse(stored);
+    } else {
+      localStorage.setItem('wfxUserData', JSON.stringify(userData));
+    }
+    updateWalletUI();
   }
-});
 
-function updateUI(marketData) {
-  document.getElementById('currentPrice').textContent = marketData.history.length > 0 
-    ? marketData.history[marketData.history.length-1].price : '...';
-  document.getElementById('supply').textContent = marketData.supply;
-  document.getElementById('demand').textContent = marketData.demand;
-  document.getElementById('lastUpdate').textContent = marketData.history.length > 0 
-    ? marketData.history[marketData.history.length-1].time : '...';
-  document.getElementById('balance').textContent = '315 WFX'; // Sabit cüzdan
-
-  chart.data.labels = marketData.history.map(h => h.time);
-  chart.data.datasets[0].data = marketData.history.map(h => h.price);
-  chart.update();
-}
-
-async function fetchMarketData() {
-  try {
-    const res = await fetch(apiUrl);
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    updateUI(data);
-  } catch(e) {
-    console.error('Fetch error:', e);
+  // Cüzdan arayüzünü güncelle
+  function updateWalletUI() {
+    userCoinsSpan.textContent = userData.coins.toFixed(4);
+    userBalanceSpan.textContent = userData.balance.toFixed(2);
   }
-}
 
-// İlk veri çekme ve sonra her 5 saniyede güncelle
-fetchMarketData();
-setInterval(fetchMarketData, 5000);
+  // Cüzdan verisini kaydet
+  function saveUserData() {
+    localStorage.setItem('wfxUserData', JSON.stringify(userData));
+  }
+
+  // Backend’den piyasa verisini al
+  async function fetchMarketData() {
+    try {
+      const res = await fetch('http://localhost:3000/api/market');
+      if (!res.ok) throw new Error('API hatası');
+      marketData = await res.json();
+      priceSpan.textContent = marketData.history.length
+        ? marketData.history[marketData.history.length -1].price
+        : marketData.initialPrice.toFixed(2);
+      updateChart();
+      updateWalletUI();
+      tradeMessage.textContent = '';
+    } catch(e) {
+      tradeMessage.textContent = 'Piyasa verisi alınamadı.';
+      console.error(e);
+    }
+  }
+
+  // Alış satış işlemi yap
+  function trade(type) {
+    const amount = parseFloat(amountInput.value);
+    if (isNaN(amount) || amount <= 0) {
+      tradeMessage.textContent = 'Lütfen geçerli bir miktar girin.';
+      return;
+    }
+    if (!marketData) {
+      tradeMessage.textContent = 'Piyasa verisi alınamadı.';
+      return;
+    }
+    const currentPrice = parseFloat(priceSpan.textContent);
+    if (type === 'buy') {
+      const cost = amount * currentPrice;
+      if (userData.balance < cost) {
+        tradeMessage.textContent = 'Yeterli TL bakiyeniz yok.';
+        return;
+      }
+      userData.balance -= cost;
+      userData.coins += amount;
+      tradeMessage.style.color = '#4caf50';
+      tradeMessage.textContent = `${amount.toFixed(4)} WFX coin satın aldınız.`;
+    } else if (type === 'sell') {
+      if (userData.coins < amount) {
+        tradeMessage.textContent = 'Yeterli WFX coininiz yok.';
+        return;
+      }
+      const gain = amount * currentPrice;
+      userData.coins -= amount;
+      userData.balance += gain;
+      tradeMessage.style.color = '#4caf50';
+      tradeMessage.textContent = `${amount.toFixed(4)} WFX coin sattınız.`;
+    }
+    updateWalletUI();
+    saveUserData();
+  }
+
+  buyBtn.addEventListener('click', () => trade('buy'));
+  sellBtn.addEventListener('click', () => trade('sell'));
+
+  // Chart.js ayarları
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  let chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'WFX Fiyatı (TL)',
+        data: [],
+        borderColor: '#4caf50',
+        backgroundColor: 'rgba(76, 175, 80, 0.3)',
+        tension: 0.3,
+        fill: true,
+        pointRadius: 3
+      }]
+    },
+    options: {
+      animation: false,
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+
+  // Chart güncelleme
+  function updateChart() {
+    if (!marketData) return;
+    chart.data.labels = marketData.history.map(item => item.time);
+    chart.data.datasets[0].data = marketData.history.map(item => parseFloat(item.price));
+    chart.update();
+  }
+
+  // Başlangıç
+  loadUserData();
+  fetchMarketData();
+
+  // Her 5 saniyede market güncelle
+  setInterval(fetchMarketData, 5000);
 </script>
+
 </body>
 </html>
