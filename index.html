@@ -1,126 +1,102 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <title>WFX Coin Borsası</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      background-color: #0f0f0f;
-      color: #ffffff;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 1rem;
-    }
-
-    canvas {
-      max-width: 100%;
-      margin: 1rem 0;
-    }
-
-    .balance {
-      font-size: 1.5rem;
-      margin-top: 1rem;
-    }
-
-    .info-box {
-      background: #1a1a1a;
-      padding: 1rem;
-      border-radius: 10px;
-      margin-top: 1rem;
-    }
-
-    .info-box p {
-      margin: 0.3rem 0;
-    }
-  </style>
+<meta charset="UTF-8" />
+<title>WFX Coin Borsası</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body {
+    background-color: #0f0f0f;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 1rem;
+  }
+  canvas {
+    max-width: 100%;
+    margin: 1rem 0;
+  }
+  .balance {
+    font-size: 1.5rem;
+    margin-top: 1rem;
+  }
+  .info-box {
+    background: #1a1a1a;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-top: 1rem;
+  }
+  .info-box p {
+    margin: 0.3rem 0;
+  }
+</style>
 </head>
 <body>
-
   <h1>WFX Coin</h1>
-  <p>Güncel Fiyat (TL): <span id="currentPrice">1.00</span></p>
-
+  <p>Güncel Fiyat (TL): <span id="currentPrice">...</span></p>
   <canvas id="priceChart" width="400" height="200"></canvas>
-
   <div class="balance">
     Cüzdanınız: <span id="balance">315 WFX</span>
   </div>
-
   <div class="info-box">
-    <p>Toplam Arz: <span id="supply">250000</span></p>
-    <p>Toplam Talep: <span id="demand">250000</span></p>
-    <p>Güncellenme Zamanı: <span id="lastUpdate"></span></p>
+    <p>Toplam Arz: <span id="supply">...</span></p>
+    <p>Toplam Talep: <span id="demand">...</span></p>
+    <p>Güncellenme Zamanı: <span id="lastUpdate">...</span></p>
   </div>
 
-  <script>
-    const initialPrice = 1.0;
-    let supply = 250000;
-    let demand = 250000;
+<script>
+const apiUrl = 'http://localhost:3000/api/market'; // Backend URL
 
-    const history = [];
+const ctx = document.getElementById('priceChart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'WFX / TL',
+      data: [],
+      borderColor: '#00ff88',
+      backgroundColor: 'rgba(0, 255, 136, 0.2)',
+      tension: 0.2,
+      fill: true,
+    }]
+  },
+  options: {
+    responsive: true,
+    scales: { y: { beginAtZero: false } }
+  }
+});
 
-    function calculatePrice() {
-      return (initialPrice * (demand / supply)).toFixed(2);
-    }
+function updateUI(marketData) {
+  document.getElementById('currentPrice').textContent = marketData.history.length > 0 
+    ? marketData.history[marketData.history.length-1].price : '...';
+  document.getElementById('supply').textContent = marketData.supply;
+  document.getElementById('demand').textContent = marketData.demand;
+  document.getElementById('lastUpdate').textContent = marketData.history.length > 0 
+    ? marketData.history[marketData.history.length-1].time : '...';
+  document.getElementById('balance').textContent = '315 WFX'; // Sabit cüzdan
 
-    function updateMarket() {
-      // Simüle edilmiş arz-talep değişimleri
-      const deltaSupply = Math.floor(Math.random() * 1000 - 500);
-      const deltaDemand = Math.floor(Math.random() * 1000 - 500);
+  chart.data.labels = marketData.history.map(h => h.time);
+  chart.data.datasets[0].data = marketData.history.map(h => h.price);
+  chart.update();
+}
 
-      supply = Math.max(1000, supply + deltaSupply);
-      demand = Math.max(1000, demand + deltaDemand);
+async function fetchMarketData() {
+  try {
+    const res = await fetch(apiUrl);
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    updateUI(data);
+  } catch(e) {
+    console.error('Fetch error:', e);
+  }
+}
 
-      const price = calculatePrice();
-
-      const now = new Date();
-      history.push({ time: now.toLocaleTimeString(), price });
-
-      if (history.length > 10) history.shift(); // sadece son 10
-
-      document.getElementById("currentPrice").textContent = price;
-      document.getElementById("supply").textContent = supply;
-      document.getElementById("demand").textContent = demand;
-      document.getElementById("lastUpdate").textContent = now.toLocaleTimeString();
-
-      updateChart();
-    }
-
-    const ctx = document.getElementById("priceChart").getContext("2d");
-    const chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: [],
-        datasets: [{
-          label: "WFX / TL",
-          data: [],
-          borderColor: "#00ff88",
-          backgroundColor: "rgba(0, 255, 136, 0.2)",
-          tension: 0.2,
-          fill: true,
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          y: {
-            beginAtZero: false
-          }
-        }
-      }
-    });
-
-    function updateChart() {
-      chart.data.labels = history.map(h => h.time);
-      chart.data.datasets[0].data = history.map(h => h.price);
-      chart.update();
-    }
-
-    updateMarket(); // ilk çalıştırma
-    setInterval(updateMarket, 5000); // her 5 saniyede güncelle
-  </script>
-
+// İlk veri çekme ve sonra her 5 saniyede güncelle
+fetchMarketData();
+setInterval(fetchMarketData, 5000);
+</script>
 </body>
 </html>
