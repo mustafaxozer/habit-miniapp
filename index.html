@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alışkanlık Takip</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    input, button { width: 100%; padding: 10px; margin: 5px 0; }
+    ul { list-style: none; padding: 0; }
+    li { margin: 5px 0; background: #eee; padding: 10px; border-radius: 5px; }
+  </style>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <h2>Alışkanlık Takip</h2>
+  <input id="habitInput" type="text" placeholder="Yeni alışkanlık gir" />
+  <button onclick="addHabit()">Ekle</button>
+  <ul id="habitList"></ul>
+
+  <script>
+    function loadHabits() {
+      const habits = JSON.parse(localStorage.getItem("habits") || "[]");
+      const list = document.getElementById("habitList");
+      list.innerHTML = "";
+      habits.forEach((habit, i) => {
+        const li = document.createElement("li");
+        li.textContent = habit;
+        const del = document.createElement("button");
+        del.textContent = "🗑️";
+        del.style.marginLeft = "10px";
+        del.onclick = () => {
+          habits.splice(i, 1);
+          localStorage.setItem("habits", JSON.stringify(habits));
+          loadHabits();
+        };
+        li.appendChild(del);
+        list.appendChild(li);
+      });
+    }
+
+    function addHabit() {
+      const input = document.getElementById("habitInput");
+      const val = input.value.trim();
+      if (!val) return;
+      const habits = JSON.parse(localStorage.getItem("habits") || "[]");
+      habits.push(val);
+      localStorage.setItem("habits", JSON.stringify(habits));
+      input.value = "";
+      loadHabits();
+    }
+
+    loadHabits();
+  </script>
+</body>
+</html>
