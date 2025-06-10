@@ -53,6 +53,14 @@
     padding: 10px;
     border-radius: 5px;
   }
+  #chart-container {
+    width: 100%;
+    max-width: 600px;
+    margin: 30px auto;
+    background: #222;
+    padding: 20px;
+    border-radius: 10px;
+  }
 </style>
 </head>
 <body>
@@ -69,15 +77,68 @@
   <button onclick="sellCoin()">Sat</button>
 </div>
 
+<div id="chart-container">
+  <canvas id="priceChart"></canvas>
+</div>
+
 <div id="messages"></div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
   let coinPrice = 1;
   let userBalance = 100;
-  let userCash = 1000; // TL cinsinden kullanıcının parası
+  let userCash = 1000;
   const priceElement = document.getElementById('coinPrice');
   const balanceElement = document.getElementById('userBalance');
   const messages = document.getElementById('messages');
+
+  // Chart.js setup
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  const priceData = {
+    labels: [],  // zaman damgaları
+    datasets: [{
+      label: 'WFX Fiyatı (₺)',
+      data: [],
+      borderColor: '#4caf50',
+      backgroundColor: 'rgba(76, 175, 80, 0.3)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 2
+    }]
+  };
+  const config = {
+    type: 'line',
+    data: priceData,
+    options: {
+      responsive: true,
+      animation: false,
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit: 'second',
+            tooltipFormat: 'HH:mm:ss',
+            displayFormats: {
+              second: 'HH:mm:ss'
+            }
+          },
+          ticks: {color: '#eee'}
+        },
+        y: {
+          ticks: {color: '#eee'},
+          beginAtZero: false
+        }
+      },
+      plugins: {
+        legend: {
+          labels: {color: '#eee'}
+        }
+      }
+    }
+  };
+  const priceChart = new Chart(ctx, config);
 
   async function fetchPrice() {
     try {
@@ -86,8 +147,23 @@
       const data = await res.json();
       coinPrice = data.price;
       priceElement.textContent = coinPrice.toFixed(2);
+
+      // Grafik verisi güncelle
+      const now = new Date();
+      priceData.labels.push(now);
+      priceData.datasets[0].data.push(coinPrice);
+
+      // Veri sayısı çok olursa eski verileri sil
+      if (priceData.labels.length > 30) {
+        priceData.labels.shift();
+        priceData.datasets[0].data.shift();
+      }
+
+      priceChart.update();
+
     } catch (e) {
       priceElement.textContent = 'Fiyat verisi alınamadı';
+      messages.innerHTML += `<div style="color: red;">${e.message}</div>`;
     }
   }
 
@@ -161,11 +237,8 @@
     }
   }
 
-  // Sayfa açılırken fiyat ve bakiye çek
   fetchPrice();
   fetchBalance();
-
-  // Her 10 saniyede bir fiyat güncelle
   setInterval(fetchPrice, 10000);
 </script>
 
