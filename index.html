@@ -7,78 +7,122 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      margin: 1rem;
       background: #121212;
       color: #eee;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      font-family: Arial, sans-serif;
+      padding: 1rem;
+      max-width: 600px;
+      margin: auto;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
     }
     #price {
       font-size: 2rem;
+      text-align: center;
       margin: 1rem 0;
     }
     #balance {
-      margin-top: 2rem;
       font-size: 1.2rem;
+      text-align: center;
+      margin-bottom: 1rem;
     }
-    canvas {
-      max-width: 100%;
-      background: #222;
-      border-radius: 10px;
+    button {
+      background: #00d8ff;
+      color: #121212;
+      border: none;
+      padding: 0.7rem 1.2rem;
+      margin: 0.3rem;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background: #00a2c6;
+    }
+    input[type="number"] {
+      width: 100px;
+      padding: 0.5rem;
+      margin-right: 0.5rem;
+      border-radius: 6px;
+      border: none;
+      font-size: 1rem;
+    }
+    .trade-section {
+      text-align: center;
+      margin-bottom: 2rem;
     }
   </style>
 </head>
 <body>
   <h1>WFX Coin Mini App</h1>
-  <canvas id="chart" width="400" height="200"></canvas>
+  <canvas id="chart" width="600" height="300"></canvas>
   <div id="price">Fiyat: Yükleniyor...</div>
-  <div id="balance">Senin WFX Bakiyen: <span id="user-balance">0</span> WFX</div>
+  <div id="balance">Bakiyen: 0 WFX</div>
+
+  <div class="trade-section">
+    <input type="number" id="amount" min="1" step="1" placeholder="Miktar" />
+    <button id="buyBtn">Al</button>
+    <button id="sellBtn">Sat</button>
+  </div>
 
   <script>
+    const apiBase = 'http://localhost:3000';
+    const user = 'default_user'; // Kullanıcı sabit, geliştirilebilir
+
     const ctx = document.getElementById('chart').getContext('2d');
     let chart;
 
-    const userAddress = "default_user"; // Sabit kullanıcı
+    let priceHistory = [];
 
-    const userBalances = {
-      default_user: 1000,
-      user1: 500,
-      user2: 2500
-    };
-
-    async function fetchMarketData() {
+    async function fetchStatus() {
       try {
-        const res = await fetch('http://localhost:3000/api/market');
+        const res = await fetch(`${apiBase}/status/${user}`);
         if (!res.ok) throw new Error('Sunucudan veri alınamadı');
         const data = await res.json();
         return data;
       } catch (e) {
+        alert('Fiyat verisi alınamadı!');
         console.error(e);
-        alert("Fiyat verisi alınamadı.");
         return null;
       }
     }
 
-    async function update() {
-      const data = await fetchMarketData();
-      if (!data) return;
+    async function trade(type, amount) {
+      try {
+        const res = await fetch(`${apiBase}/${type}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ user, amount: Number(amount) }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          alert(`Hata: ${err.error}`);
+          return null;
+        }
+        return await res.json();
+      } catch (e) {
+        alert('İşlem yapılamadı!');
+        console.error(e);
+        return null;
+      }
+    }
 
-      document.getElementById('price').textContent = `Fiyat: ${data.price} TL`;
-      document.getElementById('user-balance').textContent = userBalances[userAddress] || 0;
-
-      const labels = data.history.map(item => item.time);
-      const prices = data.history.map(item => item.price);
+    function updateChart(price) {
+      const time = new Date().toLocaleTimeString();
+      priceHistory.push({ time, price });
+      if (priceHistory.length > 20) priceHistory.shift();
 
       if (!chart) {
         chart = new Chart(ctx, {
           type: 'line',
           data: {
-            labels,
+            labels: priceHistory.map(p => p.time),
             datasets: [{
               label: 'WFX Fiyatı (TL)',
-              data: prices,
+              data: priceHistory.map(p => p.price),
               borderColor: '#00d8ff',
               backgroundColor: 'rgba(0, 216, 255, 0.2)',
               fill: true,
@@ -95,14 +139,45 @@
           }
         });
       } else {
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = prices;
+        chart.data.labels = priceHistory.map(p => p.time);
+        chart.data.datasets[0].data = priceHistory.map(p => p.price);
         chart.update();
       }
     }
 
-    update();
-    setInterval(update, 5000);
+    async function refresh() {
+      const status = await fetchStatus();
+      if (!status) return;
+
+      document.getElementById('price').textContent = `Fiyat: ${status.price.toFixed(4)} TL`;
+      document.getElementById('balance').textContent = `Bakiyen: ${status.userBalance.toFixed(4)} WFX`;
+
+      updateChart(status.price);
+    }
+
+    document.getElementById('buyBtn').onclick = async () => {
+      const amount = document.getElementById('amount').value;
+      if (!amount || amount <= 0) {
+        alert('Lütfen geçerli miktar girin');
+        return;
+      }
+      const res = await trade('buy', amount);
+      if (res) refresh();
+    };
+
+    document.getElementById('sellBtn').onclick = async () => {
+      const amount = document.getElementById('amount').value;
+      if (!amount || amount <= 0) {
+        alert('Lütfen geçerli miktar girin');
+        return;
+      }
+      const res = await trade('sell', amount);
+      if (res) refresh();
+    };
+
+    // Her 5 saniyede yenile
+    refresh();
+    setInterval(refresh, 5000);
   </script>
 </body>
 </html>
